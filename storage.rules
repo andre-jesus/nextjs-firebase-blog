@@ -1,0 +1,55 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Allow public read for event and venue images
+    match /events/{userId}/{imageId} {
+      allow read;
+      // Allow users to upload event images to their own folder
+      allow write: if isSignedIn() && isOwner(userId);
+    }
+    
+    // Venue images
+    match /venues/{venueId}/{imageId} {
+      allow read;
+      allow write: if isSignedIn() && 
+                   exists(/databases/$(database)/documents/venues/$(venueId)) &&
+                   get(/databases/$(database)/documents/venues/$(venueId)).data.ownerId == request.auth.uid;
+    }
+    
+    // User profile images
+    match /users/{userId}/{imageId} {
+      allow read;
+      allow write: if isOwner(userId);
+    }
+    
+    // Check-in images
+    match /checkIns/{checkInId}/{imageId} {
+      allow read;
+      allow write: if isSignedIn() && 
+                   exists(/databases/$(database)/documents/checkIns/$(checkInId)) &&
+                   get(/databases/$(database)/documents/checkIns/$(checkInId)).data.userId == request.auth.uid;
+    }
+    
+    // Review images
+    match /reviews/{reviewId}/{imageId} {
+      allow read;
+      allow write: if isSignedIn() && 
+                   exists(/databases/$(database)/documents/reviews/$(reviewId)) &&
+                   get(/databases/$(database)/documents/reviews/$(reviewId)).data.userId == request.auth.uid;
+    }
+    
+    // Legacy blog images (keep for migration)
+    match /{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

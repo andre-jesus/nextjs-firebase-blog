@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Posts collection
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && 
+        (request.auth.uid == resource.data.authorId || request.auth.uid == resource.data.author.uid);
+    }
+    
+    // User data
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Venues collection
+    match /venues/{venueId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      // For updates, check if user owns the venue or if ownerId field matches current user
+      allow update: if isSignedIn() && 
+                    (request.auth.uid == resource.data.ownerId || 
+                     request.auth.uid == request.resource.data.ownerId);
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.ownerId;
+    }
+    
+    // Events collection
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      // Allow updates by event creator or venue owner
+      allow update, delete: if isSignedIn() && 
+                            (request.auth.uid == resource.data.creatorId || 
+                             request.auth.uid == resource.data.organizerId ||
+                             request.auth.uid == request.resource.data.creatorId ||
+                             (resource.data.venueId != null && 
+                              get(/databases/$(database)/documents/venues/$(resource.data.venueId)).data.ownerId == request.auth.uid) ||
+                             (request.resource.data.venueId != null && 
+                              get(/databases/$(database)/documents/venues/$(request.resource.data.venueId)).data.ownerId == request.auth.uid));
+    }
+    
+    // Activities collection
+    match /activities/{activityId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+    
+    // RSVP collection
+    match /rsvps/{rsvpId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Categories collection
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if false;  // Only admins can modify
+    }
+    
+    // Comments collection
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && 
+        request.auth.uid == resource.data.authorId;
+    }
+    
+    // Newsletter subscribers
+    match /newsletter_subscribers/{docId} {
+      allow read: if isSignedIn();
+      allow create: if true;
+      allow update, delete: if isSignedIn();
+    }
+    
+    // Contact form submissions
+    match /contact_submissions/{docId} {
+      allow read: if isSignedIn();
+      allow create: if true;
+      allow update, delete: if isSignedIn();
+    }
+    
+    // Check-ins collection
+    match /checkIns/{checkInId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Reviews collection
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    // Followers collection
+    match /followers/{followId} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.followerId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.followerId == request.auth.uid;
+    }
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
